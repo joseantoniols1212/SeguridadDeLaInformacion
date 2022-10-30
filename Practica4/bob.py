@@ -3,24 +3,41 @@ import json
 import funciones_rsa
 import funciones_aes
 
+# Cargamos las claves
 Kpub_A = funciones_rsa.cargar_RSAKey_Publica("rsa_alice.pub")
-Kpri_B = funciones_rsa.cargar_RSAKey_Privada("rsa_bob.pem","bob")
+Kpri_B = funciones_rsa.cargar_RSAKey_Privada("rsa_bob.pem", "bob")
 
-socketserver = socket_class.SOCKET_SIMPLE_TCP("127.0.0.1",8081)
+# Creamos socket y escuchamos
+socketserver = socket_class.SOCKET_SIMPLE_TCP("127.0.0.1", 8081)
+print("Bob: Esperando a Alice...")
 socketserver.escuchar()
 
 array_bytes = socketserver.recibir()
 
-msg = json.loads(array_bytes.decode("utf-8"))
+msg = json.loads(array_bytes.decode("utf8"))
 
 cifradoK1, cifradoK2, firma = msg
 
-comprobacion_firma = funciones_rsa.comprobarRSA_PSS(json.dumps([cifradoK1.hex(),cifradoK2.hex()]).encode("utf-8"), firma, Kpub_A) # Falta comprobar firma
+K1 = funciones_rsa.descifrarRSA_OAEP_BIN(bytearray.fromhex(cifradoK1), Kpri_B)
+K2 = funciones_rsa.descifrarRSA_OAEP_BIN(bytearray.fromhex(cifradoK2), Kpri_B)
+firma = bytearray.fromhex(firma)
 
-K1 = funciones_rsa.descifrarRSA_OAEP_BIN(cifradoK1, Kpri_B)
-K2 = funciones_rsa.descifrarRSA_OAEP_BIN(cifradoK2, Kpri_B)
+comprobacion_firma = funciones_rsa.comprobarRSA_PSS(
+        K1+K2,
+        firma,
+        Kpub_A)
 
-socketserver.enviar(b"Recibido configuracion")
+if comprobacion_firma:
+    print("Bob: Firma valida. Comunicacion establecida.")
+else:
+    raise Exception("Error en la firma.")
+
+
+array_bytes = socketserver.recibir()
+
+aes_decipher = funciones_aes.iniciarAES_GCM_descifrado(K1, )
+encripted_msg, hmac = json.loads(array_bytes.decode("utf8"))
+
 
 socketserver.cerrar()
 
