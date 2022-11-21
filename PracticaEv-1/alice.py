@@ -5,11 +5,9 @@ import funciones_protocolo
 import json
 import sys
 
-# Cargamos la clave publica de TTP
-Kpub_T = funciones_rsa.cargar_RSAKey_Publica("rsa_ttp.pub")
-
-# Cargamos la privada de Alice
-Kpri_A = funciones_rsa.cargar_RSAKey_Privada("rsa_alice.pem", "alice")
+# Creamos la clave privada y compartimos la publica en un fichero
+Kpri_A = funciones_rsa.crear_RSAKey()
+funciones_rsa.guardar_RSAKey_Publica("rsa_alice.pub", Kpri_A)
 
 # Creamos la clave simetrica KTA
 KAT = funciones_aes.crear_AESKey()
@@ -19,14 +17,21 @@ socket = socket_class.SOCKET_SIMPLE_TCP("127.0.0.1", 8080)
 print("Alice a TTP: Iniciando comunicacion...")
 socket.conectar()
 
+# Cargamos la clave publica de TTP
+Kpub_T = funciones_rsa.cargar_RSAKey_Publica("rsa_ttp.pub")
+
+
 # 1. A -> T : Alice contacta con TTP
 
 funciones_protocolo.iniciar_sesion("Alice", KAT, Kpri_A, Kpub_T, socket)
 
+
 # 3. A -> T : Alice contacta con TTP para obtener KAB
 
-socket.enviar(json.dumps(["Alice", "Bob"]).encode("utf-8"))
-print("Alice -> T (descifrado): [\"Alice\", \"Bob\"]")
+msg_json = json.dumps(["Alice", "Bob"])
+print("Alice -> TTP (descifrado): "+msg_json)
+socket.enviar(msg_json.encode("utf-8"))
+
 
 # 4. T -> A : TTP envia la clave para la comunicacion entre A y B
 
@@ -39,13 +44,15 @@ mac = bytearray.fromhex(mac)
 # Iniciamos motor de encriptado
 aes_decrypt_T = funciones_aes.iniciarAES_GCM_descifrado(KAT, nonce)
 
-# TODO: terminar ejecucion en caso de que falle autenticidad (msg = FALSE)
 msg = funciones_aes.descifrarAES_GCM(aes_decrypt_T, msg_cifrado, mac)
+if not msg:
+    raise Exception("Alice: Error en la autenticacion (paso 4)")
 
 nonceT, timestamp, KAB, msg_cifrado_T_B, macT = json.loads(msg)
 KAB = bytearray.fromhex(KAB)
 
 socket.cerrar()
+
 
 # 5. A -> B : Alice reenvia mensaje de TTP a Bob e inicia comunicacion con Bob
 
@@ -58,7 +65,7 @@ socket.conectar()
 aes_encrypt, nonceA = funciones_aes.iniciarAES_GCM_cifrado(KAB)
 
 msg_json = json.dumps(["Alice", timestamp])
-print("Alice -> B (descifrado): ["+nonceT+", " +
+print("Alice -> Bob (descifrado): ["+nonceT+", " +
       macT+", "+msg_cifrado_T_B+", "+msg_json+"]")
 msg_cifrado_A_B, macA = funciones_aes.cifrarAES_GCM(
         aes_encrypt,
@@ -81,6 +88,8 @@ msg_cifrado = bytearray.fromhex(msg_cifrado)
 aes_decrypt = funciones_aes.iniciarAES_GCM_descifrado(KAB, nonce)
 
 timestamp_bytes = funciones_aes.descifrarAES_GCM(aes_decrypt, msg_cifrado, mac)
+if not timestamp_bytes:
+    raise Exception("Alice: Error en la autenticacion (paso 6)")
 timestampB = int.from_bytes(timestamp_bytes, sys.byteorder)
 
 # Comprobamos que se corresponda dicha marca de tiempo
@@ -96,7 +105,7 @@ aes_encrypt, nonce = funciones_aes.iniciarAES_GCM_cifrado(KAB)
 msg_cifrado, mac = funciones_aes.cifrarAES_GCM(
         aes_encrypt,
         "77684682C".encode("utf-8"))
-print("Alice -> B (descifrado): 77684682C")
+print("Alice -> Bob (descifrado): 77684682C")
 
 msg_json = json.dumps([nonce.hex(), mac.hex(), msg_cifrado.hex()])
 socket.enviar(msg_json.encode("utf-8"))
@@ -114,5 +123,7 @@ msg_cifrado = bytearray.fromhex(msg_cifrado)
 aes_decrypt = funciones_aes.iniciarAES_GCM_descifrado(KAB, nonce)
 
 apellido_bytes = funciones_aes.descifrarAES_GCM(aes_decrypt, msg_cifrado, mac)
+if not apellido_bytes:
+    raise Exception("Alice: Error en la autenticacion (paso 8)")
 print("Alice ha recibido el mensaje con el apellido: ",
       apellido_bytes.decode("utf-8"))

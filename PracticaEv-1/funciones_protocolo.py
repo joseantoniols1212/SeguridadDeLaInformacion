@@ -9,7 +9,7 @@ def iniciar_sesion(nombre, Ksesion, Kpriv_usuario, Kpub_ttp, socket):
     msg.append(nombre)
     msg.append(Ksesion.hex())
     json_msg = json.dumps(msg)
-    print(nombre+" -> T (descifrado): " + json_msg)
+    print(nombre+" -> TTP (descifrado): " + json_msg)
 
 # - Ciframos el mensaje con RSA
     msg_cifrado = funciones_rsa.cifrarRSA_OAEP(json_msg, Kpub_ttp)
