@@ -64,6 +64,10 @@ if not msg:
     raise Exception("Bob: Error en la autenticacion (paso 5, decodificando mensaje de A)")
 nombre, timestamp_A = json.loads(msg)
 
+# Comprobamos que coinciden las timestamp de A y T
+if timestamp_T != timestamp_A:
+    raise Exception("Bob: Error las marcas de tiempo de A y T no coinciden")
+
 
 # 6. B -> A : Bob confirma inicio de comunicaciones con Alice
 
